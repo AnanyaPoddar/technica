@@ -91,7 +91,7 @@ async def on_message(msg):
     out_msg = msg.content
     censored_wrds_used = ""
     is_censored = False
-    for i,word in enumerate(blocked_words):
+    for i,word in enumerate(blocked_dict.keys()):
         if word + " " in msg.content or " " + word in msg.content:
             is_censored = True
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")

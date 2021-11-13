@@ -5,15 +5,17 @@ import requests
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
+from google.cloud import language_v1
 
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 load_dotenv()
 
 GUILD = "Hackerbois"
 bot = commands.Bot(command_prefix='!')
+client = language_v1.LanguageServiceClient()
 
-blocked_words = ['ur', 'mum']
 sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
-reason = ["default", "default"] #this is the reason given by user for blocking the word
+blocked_dict = {'ur':'reason1', 'mum':'reason2'}
 
 @bot.event
 async def on_ready():
@@ -35,29 +37,30 @@ async def censored(ctx):
     if ctx.author == bot.user:
         return
 
-    await ctx.send(blocked_words)
+    await ctx.send(blocked_dict)
 
 @bot.command(name='AddWord', help='Allows user to add word to list of censored words')
 async def add(ctx, word):
     if ctx.author == bot.user:
         return
 
-    if word.lower() in blocked_words:
+    if word.lower() in blocked_dict:
         await ctx.send("Word already censored")
 
     else:
         # get definition from dictionaryAPI & send message
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
-        await ctx.send(definition.status_code)
-
         await ctx.send(definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
+        #defn = definition.json()
+        await ctx.send(definition.json())
+        # ['meanings'][0]['definitions'][0]['definition']
 
         # prompt user to why this term is offensive and who it offends
         await ctx.send("What is the term " + word + " offensive and who does it target?")
 
         # wait for user to answer
+
         def check(m):
-            reason.append(m.content)
             return len(m.content)>0 and m.channel == ctx.channel
 
         msg = await bot.wait_for("message", check=check)
@@ -77,16 +80,10 @@ async def add(ctx, word):
         #    await ctx.send('👎')
         #else:
         #    await ctx.send('👍')
-        
 
         # adds word to list and states why
-        blocked_words.append(word)
-        await ctx.send("Successfully added [" + word + "] to list of censored words because [" + reason[-1] +"]")
-
-
-from google.cloud import language_v1
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
-client = language_v1.LanguageServiceClient()
+        blocked_dict[word] = msg.content
+        await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
 
 @bot.event
 async def on_message(message):
@@ -132,5 +129,29 @@ async def on_message(message):
     
     #Fixing the overriding issue
     await bot.process_commands(message)
+
+@bot.event
+async def on_message(msg):
+    if msg.author == bot.user:
+        return
     
+    out_msg = msg.content
+    censored_wrds_used = ""
+    is_censored = False
+    for i,word in enumerate(blocked_dict.keys()):
+        if word + " " in msg.content or " " + word in msg.content:
+            is_censored = True
+            out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
+            censored_wrds_used += word + ", "
+    censored_wrds_used = censored_wrds_used[:-2] # removing last comma
+    # delete message with slur
+    if is_censored:
+        await msg.delete()
+        # send message to main channel
+        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
+        # send private warning msg describing the slur
+        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
+                                censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
+
+        
 bot.run(TOKEN)

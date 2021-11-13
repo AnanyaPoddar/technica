@@ -1,18 +1,18 @@
+from contextlib import asynccontextmanager
+import json
 import os
-
+import requests
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
 
 load_dotenv()
-# TOKEN = os.getenv('DISCORD_TOKEN')
-##DON'T COMMIT THIS TO GITHUB PLS
-TOKEN = "OTA2NzIyMDY1ODcxMTU1MjAx.YYcwug.P_eNYINfgDakwrGdWP0-ZFhkZPM"
-GUILD = "Hackerbois"
+
 
 bot = commands.Bot(command_prefix='!')
 
 blocked_words = ['ur', 'mum']
+reason = ["default", "default"] #this is the reason given by user for blocking the word
 
 @bot.event
 async def on_ready():
@@ -45,7 +45,42 @@ async def on_message(ctx, word):
         await ctx.send("Word already censored")
 
     else:
+        # get definition from dictionaryAPI & send message
+        definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
+        await ctx.send(definition.status_code)
+        #defn = definition.json()
+        await ctx.send(definition.json())
+        # ['meanings'][0]['definitions'][0]['definition']
+
+        # prompt user to why this term is offensive and who it offends
+        await ctx.send("What is the term " + word + " offensive and who does it target?")
+
+        # wait for user to answer
+        def check(m):
+            reason.append(m.content)
+            return len(m.content)>0 and m.channel == ctx.channel
+
+        msg = await bot.wait_for("message", check=check)
+
+        # wait for a few thumbs up emojis before adding it
+        # Should it timeout or non?
+        # Error: if you try to add another word while one is waiting for emoji
+        # if that second word gets emoji, both get added to list
+        await ctx.send('React with a 👍 to add [' + word + '] to the censored list.')
+
+        def check(reaction, user):
+            return str(reaction.emoji) == '👍'
+        #try:
+        reaction, user = await bot.wait_for('reaction_add', timeout=60.0, check=check)
+        await ctx.send('👍')
+        #except asynccontextmanager.TimeoutError:
+        #    await ctx.send('👎')
+        #else:
+        #    await ctx.send('👍')
+        
+
+        # adds word to list and states why
         blocked_words.append(word)
-        await ctx.send("Successfully added " + word + " to list of censored words")
+        await ctx.send("Successfully added [" + word + "] to list of censored words because [" + reason[-1] +"]")
     
 bot.run(TOKEN)

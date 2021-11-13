@@ -82,5 +82,29 @@ async def on_message(ctx, word):
         # adds word to list and states why
         blocked_dict[word] = msg.content
         await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
+
+@bot.event
+async def on_message(msg):
+    if msg.author == bot.user:
+        return
     
+    out_msg = msg.content
+    censored_wrds_used = ""
+    is_censored = False
+    for i,word in enumerate(blocked_words):
+        if word in msg.content:
+            is_censored = True
+            out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
+            censored_wrds_used += word + ", "
+    censored_wrds_used = censored_wrds_used[:-2] # removing last comma
+    # delete message with slur
+    if is_censored:
+        await msg.delete()
+        # send message to main channel
+        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
+        # send private warning msg describing the slur
+        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
+                                censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
+
+        
 bot.run(TOKEN)

@@ -92,7 +92,7 @@ async def on_message(msg):
     censored_wrds_used = ""
     is_censored = False
     for i,word in enumerate(blocked_words):
-        if word in msg.content:
+        if word + " " in msg.content or " " + word in msg.content:
             is_censored = True
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             censored_wrds_used += word + ", "

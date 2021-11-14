@@ -7,29 +7,73 @@ from dotenv import load_dotenv
 from discord.ext import commands
 from google.cloud import language_v1
 
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 load_dotenv()
 
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 GUILD = "Hackerbois"
+
 bot = commands.Bot(command_prefix='!')
 client = language_v1.LanguageServiceClient()
 
-sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
+sensitive_options = ['/Sensitive Subjects', '/Social Issues & Advocacy/Discrimination & Identity Relations', '/Health/Substance Abuse',
+'/Social Issues & Advocacy/Discrimination & Identity Relations', '/Social Issues & Advocacy/Work & Labor Issues', '/Social Issues & Advocacy/Human Rights & Liberties']
+
+#Chosen categories from above options
+sensitive_categories = []
 blocked_dict = {'ur':'reason1', 'mum':'reason2'}
 
+#Ids of messages containing sensitive_options, for gathering reactions
+sensitive_ids = []
+
+#Create sensitive_topics channel
 @bot.event
 async def on_ready():
-    #python vars not block scoped in loop
-    for guild in bot.guilds:
-        if guild.name == GUILD:
-            break
+    await bot.wait_until_ready()
 
-    print(
-        f'{bot.user} is connected to guild: ' f'{guild.name}'
+    for guild in bot.guilds:    
+        existing_channel = discord.utils.get(guild.channels, name='sensitive-topics')
+        if not existing_channel:
+            await guild.create_text_channel('sensitive-topics')
+            channel = discord.utils.get(guild.channels, name='sensitive-topics')
+            await channel.send("Sensitive topics are topics for which you will get content warnings server-wide.\
+            They aren't censored by default, but users can choose to avoid them if they wish.\n React with a 👍! Any topics with more than 50 percent of server-wide votes will be considered sensitive.")
+            for option in sensitive_options:
+                msg = await channel.send(option)
+                sensitive_ids.append(msg.id)
+
+#Check sensitive topics if reaction addee
+@bot.event
+async def on_raw_reaction_add(payload):
+
+    if payload.message_id in sensitive_ids and payload.emoji.name == '👍':
+        channel = bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
+
+        if reaction and reaction.count >= len(bot.get_guild(payload.guild_id).members)/2 and message.content not in sensitive_categories:
+            sensitive_categories.append(message.content)
+
+#Check sensitive topics if reaction removed
+@bot.event
+async def on_raw_reaction_remove(payload):
+
+    if payload.message_id in sensitive_ids and payload.emoji.name == '👍':
+        channel = bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
+
+        if reaction and reaction.count < len(bot.get_guild(payload.guild_id).members)/2 and message.content in sensitive_categories:
+            sensitive_categories.pop(message.content)
+
+
+
+@bot.event
+async def on_member_join(member):
+    await member.create_dm()
+    await member.dm_channel.send(
+        f'Hi {member.name}, welcome to the ' f'{bot.guilds[0].name} server!\nI am HackerBot, here to make sure that this server is a safe space for you. Type !help to see what I can do.'
     )
 
-    members = '\n - '.join([member.name for member in guild.members])
-    print(f'Guild Members:\n - {members}')
 
 @bot.command(name='Censored',  help='Lists all censored words')
 async def censored(ctx):
@@ -85,50 +129,15 @@ async def add(ctx, word):
         blocked_dict[word] = msg.content
         await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
 
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
+@bot.command(name='Sensitive', help='Lists all sensitive topics (content warnings, not censored)')
+async def sensitive(ctx):
+    #bot.user is the bot, prevent against recursive response
+    if ctx.author == bot.user:
         return
-    document = language_v1.Document(
-        content=message.content, type_=language_v1.Document.Type.PLAIN_TEXT
-    )
-    sentiment = client.analyze_sentiment(
-        request={"document": document}
-    ).document_sentiment
 
-    #Content classification requires 20 tokens, repeat message until that is reached
-    content = message.content
-    words = content.split()
-    while(len(words) < 20):
-        content = content + " " + content
-        words = content.split()
-        print(content)
-
-    
-    document = {"content": content, "type_": language_v1.Document.Type.PLAIN_TEXT}
-   
-    response = client.classify_text(request = {'document': document})
-    
-    print(sentiment.score, sentiment.magnitude)
-    print(response.categories)
-
-    #Very negative, regardless of topic, should be banned
-    if(sentiment.score <=0.89 and sentiment.magnitude >=0.89):
-        await message.author.send("Category 1: Obviously very negative")
-
-    #Clearly about sensitive topic, should be banned
-    for category in response.categories:
-        if category.name in sensitive_categories and category.confidence >= 0.89:
-            await message.author.send("Category 2: Obviously sensitive topic")
-
-    #Both negative and sensitive
-    if(sentiment.score <= -0.7 and sentiment.magnitude >= 0.8):
-        for category in response.categories:
-            if category.name in sensitive_categories and category.confidence >= 0.6:
-                await message.author.send("Category 3: Both negative and sensitive")
-    
-    #Fixing the overriding issue
-    await bot.process_commands(message)
+    embed=discord.Embed(color=0x00cca3)
+    embed.add_field(name="Sensitive Topics", value= ', '.join(sensitive_categories), inline=False)
+    await ctx.send(embed=embed)
 
 @bot.event
 async def on_message(msg):
@@ -153,5 +162,55 @@ async def on_message(msg):
         await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
                                 censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
 
-        
+#Sentiment analysis
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+    document = language_v1.Document(
+        content=message.content, type_=language_v1.Document.Type.PLAIN_TEXT,
+    )
+    sentiment = client.analyze_sentiment(
+        request={"document": document}
+    ).document_sentiment
+
+    #Content classification requires 20 tokens, repeat message until that is reached
+    content = message.content
+    words = content.split()
+    while(len(words) < 20):
+        content = content + " " + content
+        words = content.split()
+
+    document = {"content": content, "type_": language_v1.Document.Type.PLAIN_TEXT}
+   
+    response = client.classify_text(request = {'document': document})
+
+    #Very negative, regardless of topic, should be banned
+    if(sentiment.score <=-0.89 and sentiment.magnitude >=0.89):
+        embed=discord.Embed(color=0x00cca3)
+        embed.add_field(name="Warning: I have detected the use of negative/offensive language.", value="You wrote: " + message.content, inline=False)
+        await message.author.send(embed=embed)
+        # await message.author.send("Warning: I have detected the use of negative/offensive language." + "\n" + "You wrote: " + message.content)
+
+    # #Clearly about sensitive topic, should be banned
+    # for category in response.categories:
+    #     if category.name in sensitive_categories and category.confidence >= 0.89:
+    #         await message.author.send("Warning: I have detected the use of negative/offensive language." + "\n" + "You wrote: " + message.content)
+
+    #Both negative and sensitive
+    sensitive = False
+    categories = []
+    if(sentiment.score <= -0.7 and sentiment.magnitude >= 0.8):
+        for category in response.categories:
+            if category.name in sensitive_categories and category.confidence >= 0.7:
+                sensitive = True
+                categories.append(category.name)
+        if sensitive:
+            embed=discord.Embed(color=0x00cca3)
+            embed.add_field(name="Warning: I have detected negative/offensive language about the following sensitive topic(s) :" + ', '.join(categories), value="You wrote: " + message.content, inline=False)
+            await message.author.send(embed=embed)
+    
+    #Fixing the overriding issue
+    await bot.process_commands(message)
+
 bot.run(TOKEN)

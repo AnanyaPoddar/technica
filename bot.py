@@ -6,13 +6,14 @@ import discord
 from dotenv import load_dotenv
 from discord.ext import commands
 
+TOKEN = "OTA2NzIyMDY1ODcxMTU1MjAx.YYcwug.ZSmxZBxgW053xXo3h8y-t7umwbQ"
+GUILD = "Hackerbois"
+
 load_dotenv()
-
-
 
 bot = commands.Bot(command_prefix='!')
 
-blocked_dict = {'ur':'reason1', 'mum':'reason2'}
+blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
 
 @bot.event
 async def on_ready():
@@ -33,8 +34,17 @@ async def on_message(ctx):
     #bot.user is the bot, prevent against recursive response
     if ctx.author == bot.user:
         return
-
+    blocked_dict["ur"]
     await ctx.send(blocked_dict)
+
+@bot.command(name='Define', help='Defines the specified word')
+async def on_message(ctx, word):
+    if ctx.author == bot.user:
+        return
+
+    if word.lower() in blocked_dict:
+        await ctx.send(blocked_dict[word.lower()])
+    
 
 @bot.command(name='AddWord', help='Allows user to add word to list of censored words')
 async def on_message(ctx, word):
@@ -49,7 +59,6 @@ async def on_message(ctx, word):
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
         await ctx.send(definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
         #defn = definition.json()
-        await ctx.send(definition.json())
         # ['meanings'][0]['definitions'][0]['definition']
 
         # prompt user to why this term is offensive and who it offends
@@ -105,6 +114,25 @@ async def on_message(msg):
         # send private warning msg describing the slur
         await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
                                 censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
+    await bot.process_commands(msg)
 
+@bot.event
+async def on_message(msg):
+    if msg.author == bot.user:
+        return
+    
+    out_msg = msg.content
+
+    if len(out_msg) < 2 or not(out_msg.startswith("!")):
+        return
+    
+    #print(msg.author.name) #name of person
+
+    if out_msg[1:] in blocked_dict:
+        embed=discord.Embed(color=0x00cca3)
+        embed.add_field(name=out_msg[1:], value=blocked_dict[out_msg[1:]], inline=False)
+        await msg.channel.send(embed=embed)
+        #await msg.channel.send(blocked_dict[out_msg[1:]])
+    await bot.process_commands(msg)
         
 bot.run(TOKEN)

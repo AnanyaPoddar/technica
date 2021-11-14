@@ -1,11 +1,15 @@
 from contextlib import asynccontextmanager
 import json
 import os
+import io
 import requests
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands
 from google.cloud import language_v1
+import shutil
+import uuid
+from google.cloud import vision
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 load_dotenv()
@@ -13,6 +17,7 @@ load_dotenv()
 GUILD = "Hackerbois"
 bot = commands.Bot(command_prefix='!')
 client = language_v1.LanguageServiceClient()
+client_vision = vision.ImageAnnotatorClient()
 
 blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
 sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
@@ -139,46 +144,69 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.event
-async def on_message(msg):
-    if msg.author == bot.user:
+async def on_message(message):
+    if message.author == bot.user:
         return
     
-    out_msg = msg.content
+    out_msg = message.content
     censored_wrds_used = ""
     is_censored = False
     for i,word in enumerate(blocked_dict.keys()):
-        if word + " " in msg.content or " " + word in msg.content:
+        if word + " " in message.content or " " + word in message.content:
             is_censored = True
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             censored_wrds_used += word + ", "
     censored_wrds_used = censored_wrds_used[:-2] # removing last comma
     # delete message with slur
     if is_censored:
-        await msg.delete()
+        await message.delete()
         # send message to main channel
-        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
+        await message.channel.send(out_msg + "\n" + "**Warning " + message.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
         # send private warning msg describing the slur
-        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
+        await message.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
                                 censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
-    await bot.process_commands(msg)
+    # warning messages
+    out_msg = message.content
+    if not(len(out_msg) < 2 or not(out_msg.startswith("!"))):
+        if out_msg[1:] in blocked_dict:
+            embed=discord.Embed(color=0x00cca3)
+            embed.add_field(name=out_msg[1:], value=blocked_dict[out_msg[1:]], inline=False)
+            await message.channel.send(embed=embed)
+            #await msg.channel.send(blocked_dict[out_msg[1:]])
 
-@bot.event
-async def on_message(msg):
-    if msg.author == bot.user:
-        return
+    # get attachements
+    for attachment in message.attachments:
+        print(attachment.filename)
+        url = attachment.url
+        file_path = str(uuid.uuid4()) + '.jpg'
+        await attachment.save(file_path)
+
+        with io.open(file_path, 'rb') as image_file:
+            content = image_file.read()
+        image = vision.Image(content=content)
+        # create image obj
+        response = client_vision.safe_search_detection(image=image) # pass image object
+        # json subscriptable obj from response
+        safe_search =response.safe_search_annotation
+        safe_search.adult
+        likelihood = ('Unknown', 'Very Unlikley', 'Unlikley', 'Possible', 'Likely', 'Very Likley')
+        print('adult: {0}'.format(likelihood[safe_search.adult]))
+        print('spoof: {0}'.format(likelihood[safe_search.spoof]))
+        print('medical: {0}'.format(likelihood[safe_search.medical]))
+        print('violence: {0}'.format(likelihood[safe_search.violence]))
+        print('racy: {0}'.format(likelihood[safe_search.racy]))
+
+        if likelihood[safe_search.adult] in ['Likely', 'Very Likley']:
+            await message.channel.send('**ADULT content**')
+        if likelihood[safe_search.spoof] in ['Likely', 'Very Likley']:
+            await message.channel.send('**SPOOF content**')
+        if likelihood[safe_search.medical] in ['Likely', 'Very Likley']:
+            await message.channel.send('**MEDICAL content**')
+        if likelihood[safe_search.violence] in ['Likely', 'Very Likley']:
+            await message.channel.send('**VIOLENCE content**')
+        if likelihood[safe_search.racy] in ['Likely', 'Very Likley']:
+            await message.channel.send('**RACY content**')
     
-    out_msg = msg.content
+    await bot.process_commands(message)
 
-    if len(out_msg) < 2 or not(out_msg.startswith("!")):
-        return
-    
-    #print(msg.author.name) #name of person
-
-    if out_msg[1:] in blocked_dict:
-        embed=discord.Embed(color=0x00cca3)
-        embed.add_field(name=out_msg[1:], value=blocked_dict[out_msg[1:]], inline=False)
-        await msg.channel.send(embed=embed)
-        #await msg.channel.send(blocked_dict[out_msg[1:]])
-    await bot.process_commands(msg)
-        
 bot.run(TOKEN)

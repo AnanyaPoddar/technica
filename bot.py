@@ -23,6 +23,7 @@ client = language_v1.LanguageServiceClient()
 client_vision = vision.ImageAnnotatorClient()
 
 blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
+blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
 sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
 
 @bot.event
@@ -44,16 +45,21 @@ async def censored(ctx):
     #bot.user is the bot, prevent against recursive response
     if ctx.author == bot.user:
         return
-    blocked_dict["ur"]
-    await ctx.send(blocked_dict)
+    embed=discord.Embed(title="Censored Words", color=0x00cca3)
+    for word in blocked_dict:
+        embed.add_field(name=word.title(), value=blocked_def[word], inline=False)
+    await ctx.send(embed=embed)
 
 @bot.command(name='Define', help='Defines the specified word')
 async def on_message(ctx, word):
     if ctx.author == bot.user:
         return
 
-    if word.lower() in blocked_dict:
-        await ctx.send(blocked_dict[word.lower()])
+    if word.lower() in blocked_dict and word.lower() in blocked_def:
+        embed=discord.Embed(title=word.title(), color=0x00cca3)
+        embed.add_field(name="Definition:", value=blocked_def[word], inline=False)
+        embed.add_field(name="Reason Why It's Censored:", value=blocked_dict[word], inline=False)
+        await ctx.send(embed=embed)
     
 
 @bot.command(name='AddWord', help='Allows user to add word to list of censored words')
@@ -67,7 +73,8 @@ async def add(ctx, word):
     else:
         # get definition from dictionaryAPI & send message
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
-        await ctx.send(definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
+        defn = definition.json()[0]["meanings"][0]["definitions"][0]["definition"]
+        await ctx.send(defn)
         # Error:  if word doesn't exist
 
 
@@ -102,6 +109,7 @@ async def add(ctx, word):
 
         # adds word to list and states why
         blocked_dict[word] = msg.content # the reason the user gave for blocking word
+        blocked_def[word] = defn
         await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
 
 @bot.event
@@ -146,7 +154,7 @@ async def on_message(message):
             if category.name in sensitive_categories and category.confidence >= 0.6:
                 await message.author.send("Category 3: Both negative and sensitive")
     
-    #Fixing the overriding issue
+    Fixing the overriding issue
     await bot.process_commands(message)
 
 @bot.event
@@ -158,7 +166,7 @@ async def on_message(message):
     censored_wrds_used = ""
     is_censored = False
     for i,word in enumerate(blocked_dict.keys()):
-        if word + " " in message.content or " " + word in message.content:
+        if " " + word + " " in message.content:
             is_censored = True
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             censored_wrds_used += word + ", "
@@ -172,14 +180,15 @@ async def on_message(message):
         await message.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
                                 censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
     # warning messages
-    out_msg = message.content
-    if not(len(out_msg) < 2 or out_msg.startswith("!")):
-        if out_msg[1:] in blocked_dict:
-            embed=discord.Embed(color=0x00cca3)
-            embed.add_field(name=out_msg[1:], value=blocked_dict[out_msg[1:]], inline=False)
-            await message.channel.send(embed=embed)
+    # out_msg = message.content
+    # if not(len(out_msg) < 2 or out_msg.startswith("!")):
+    #     if out_msg[1:] in blocked_dict and out_msg[1:] in blocked_def:
+    #         embed=discord.Embed(title=out_msg[1:].upper(), color=0x00cca3)
+    #         embed.add_field(name="Definition:", value=blocked_def[out_msg[1:]], inline=False)
+    #         embed.add_field(name="Reason Why It's Censored:", value=blocked_dict[out_msg[1:]], inline=False)
+    #         await message.channel.send(embed=embed)
             #await msg.channel.send(blocked_dict[out_msg[1:]])
-
+    
     # get attachements
     for attachment in message.attachments:
         print(attachment.filename)
@@ -231,7 +240,7 @@ async def on_message(message):
             await message.delete()
             await message.channel.send(file=discord.File(file_path))
             
-            
     await bot.process_commands(message)
+    
 
 bot.run(TOKEN)

@@ -12,7 +12,25 @@ import shutil
 import uuid
 from google.cloud import vision
 from PIL import Image
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
+import pyrebase
 
+config = {
+    "apiKey": "AIzaSyBqdNEsbcmNccYcej7aSVWn_CuqtNNafuw",
+    "authDomain": "technica-database.firebaseapp.com",
+    "databaseURL": "https://technica-database-default-rtdb.firebaseio.com",
+    "projectId": "technica-database",
+    "storageBucket": "technica-database.appspot.com",
+    "messagingSenderId": "449967852434",
+    "appId": "1:449967852434:web:77a902afae6b230ada4f4b",
+    "measurementId": "G-134M21GGZC",
+    "databaseURL": "https://technica-database-default-rtdb.firebaseio.com/"
+}
+
+firebase = pyrebase.initialize_app(config)
+database = firebase.database()
 
 load_dotenv()
 
@@ -25,22 +43,55 @@ client_vision = vision.ImageAnnotatorClient()
 
 sensitive_options = ['/Sensitive Subjects', '/Social Issues & Advocacy/Discrimination & Identity Relations', '/Health/Substance Abuse',
 '/Social Issues & Advocacy/Discrimination & Identity Relations', '/Social Issues & Advocacy/Work & Labor Issues', '/Social Issues & Advocacy/Human Rights & Liberties']
-blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
-blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
+#blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
+#blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
 sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
 
 #Chosen categories from above options
 sensitive_categories = []
-blocked_dict = {'ur':'reason1', 'mum':'reason2'}
+#blocked_dict = {'ur':'reason1', 'mum':'reason2'}
 
 #Ids of messages containing sensitive_options, for gathering reactions
 sensitive_ids = []
+
+def GetCensorInfo(info='word'):
+    '''Get list of all words, reasons, or defn based on info
+    set info to reason, word, definition'''
+    data = database.child("censored_words_to_reason").get().val()
+    
+    out = []
+    if info == 'word':
+        for word in data.keys():
+            out.append(word)
+            print(out)
+    else:
+        for val in data.values():
+            out.append(val[info])
+            print(out)
+    return out
+
+def CheckIfWordExists(word):
+    return database.child('censored_words_to_reason').child(word).shallow().get().val()
+
+def AddWord(word, reason='None', definition='None'):
+    data = {'reason': reason, 'definition': definition}
+    print(data)
+    database.child('censored_words_to_reason').child(word).set(data)
+
+def GetReason(word):
+    return database.child('censored_words_to_reason').child(word).child('reason').get().val()
+def GetDefinition(word):
+    return database.child('censored_words_to_reason').child(word).child('definition').get().val()
+def SetReason(word, reason):
+    database.child('censored_words_to_reason').child(word).child('reason').set({reason})
+def SetDefinition(word, reason):
+    database.child('censored_words_to_reason').child(word).child('reason').set({definition})
 
 #Create sensitive_topics channel
 @bot.event
 async def on_ready():
     await bot.wait_until_ready()
-
+    print('redy')
     for guild in bot.guilds:    
         existing_channel = discord.utils.get(guild.channels, name='sensitive-topics')
         if not existing_channel:
@@ -92,8 +143,8 @@ async def censored(ctx):
     if ctx.author == bot.user:
         return
     embed=discord.Embed(title="Censored Words", color=0x00cca3)
-    for word in blocked_dict:
-        embed.add_field(name=word.title(), value=blocked_def[word], inline=False)
+    for word in GetCensorInfo('word'):
+        embed.add_field(name=word.title(), value=GetDefinition(word), inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name='Define', help='Defines the specified word')
@@ -101,10 +152,10 @@ async def on_message(ctx, word):
     if ctx.author == bot.user:
         return
 
-    if word.lower() in blocked_dict and word.lower() in blocked_def:
+    if word.lower() in GetCensorInfo('word'):# and word.lower() in blocked_def:
         embed=discord.Embed(title=word.title(), color=0x00cca3)
-        embed.add_field(name="Definition:", value=blocked_def[word], inline=False)
-        embed.add_field(name="Reason Why It's Censored:", value=blocked_dict[word], inline=False)
+        embed.add_field(name="Definition:", value=GetDefinition(word), inline=False)
+        embed.add_field(name="Reason Why It's Censored:", value=GetCensorInfoForWord(word), inline=False)
         await ctx.send(embed=embed)
     
 
@@ -113,7 +164,7 @@ async def add(ctx, word):
     if ctx.author == bot.user:
         return
 
-    if word.lower() in blocked_dict:
+    if word.lower() in GetCensorInfo('word'):
         await ctx.send("Word already censored")
 
     else:
@@ -151,9 +202,11 @@ async def add(ctx, word):
         await ctx.send('👍')
 
         # adds word to list and states why
-        blocked_dict[word] = msg.content # the reason the user gave for blocking word
-        blocked_def[word] = defn
-        await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
+        AddWord(word, msg.content, defn) # set both the reason and reason the user gave for blocking word
+        #blocked_def[word] = defn
+        #data = {'"'+word+'"' : msg.content} # new
+        #database.child("censored_words_to_reason").child(word).set(data) # new
+        await ctx.send("Successfully added [" + word + "] to list of censored words because [" + GetReason(word) +"]")
 
 @bot.command(name='Sensitive', help='Lists all sensitive topics (content warnings, not censored)')
 async def sensitive(ctx):
@@ -168,41 +221,41 @@ async def sensitive(ctx):
         value =  value= ', '.join(sensitive_categories)
     embed.add_field(name="Sensitive Topics", value= value, inline=False)
     await ctx.send(embed=embed)
-
-@bot.event
-async def on_message(msg):
-    if msg.author == bot.user:
-        return
-    
-    out_msg = msg.content
-    censored_wrds_used = ""
-    is_censored = False
-    for i,word in enumerate(blocked_dict.keys()):
-        if word + " " in msg.content or " " + word in msg.content:
-            is_censored = True
-            out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
-            censored_wrds_used += word + ", "
-    censored_wrds_used = censored_wrds_used[:-2] # removing last comma
-    # delete message with slur
-    if is_censored:
-        await msg.delete()
-        # send message to main channel
-        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
-        # send private warning msg describing the slur
-        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
-                                censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
-
+##
+##@bot.event
+##async def on_message(msg):
+##    if msg.author == bot.user:
+##        return
+##    
+##    out_msg = msg.content
+##    censored_wrds_used = ""
+##    is_censored = False
+##    for i,word in enumerate(GetCensorInfo('word')):
+##        if word + " " in msg.content or " " + word in msg.content:
+##            is_censored = True
+##            out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
+##            censored_wrds_used += word + ", "
+##    censored_wrds_used = censored_wrds_used[:-2] # removing last comma
+##    # delete message with slur
+##    if is_censored:
+##        await msg.delete()
+##        # send message to main channel
+##        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
+##        # send private warning msg describing the slur
+##        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
+##                                censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
+##
 
 @bot.command(name='EditWord', help='Allows user to add word to list of censored words')
 async def add(ctx, word):
     if ctx.author == bot.user:
         return
 
-    if word.lower() in blocked_dict:
+    if word.lower() in GetCensorInfo('word'):
         # give existing info about word
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
         await ctx.send("Definition: " + definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
-        await ctx.send("Reason for censor: " + blocked_dict[word])
+        await ctx.send("Reason for censor: " + GetReason(word))
         embed=discord.Embed(color=0x00cca3)
         embed.add_field(name="Provide Change of Reasoning", value="Why is the term " + word + " offensive and who does it target?", inline=False)
         await ctx.send(embed=embed)
@@ -224,7 +277,8 @@ async def add(ctx, word):
         await ctx.send('👍')
 
         # updates reasoning
-        blocked_dict[word] = msg.content # the reason the user gave for blocking word
+        #blocked_dict[word] = msg.content # the reason the user gave for blocking word
+        SetReason(word, msg.content)
         await ctx.send("Successfully updated reasoning for [" + word + "] to [" + blocked_dict[word] +"]")
 
     else:
@@ -288,7 +342,7 @@ async def on_message(message):
     out_msg = message.content
     censored_wrds_used = ""
     is_censored = False
-    for i,word in enumerate(blocked_dict.keys()):
+    for i,word in enumerate(GetCensorInfo('word')):
         if " " + word + " " in message.content:
             is_censored = True
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")

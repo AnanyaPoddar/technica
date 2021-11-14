@@ -264,16 +264,6 @@ async def on_message(message):
             commands = ["!Define", "!AddWord", "!EditWord"]
             if len(message.content.split()) == 2 and (message.content.split()[0] in commands):
                 is_censored = False
-<<<<<<< HEAD
-=======
-=======
-    for i,word in enumerate(GetCensorInfo('word')):
-        if word in message.content.lower().split():
-            is_censored = True
-            commands = ["!Define", "!AddWord", "!EditWord"]
-            if len(message.content.split()) == 2 and (message.content.split()[0] in commands):
-                is_censored = False
->>>>>>> 474a3d7bce233d84b15ef22013a5d0445a768ad4
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             censored_wrds_used += word + ", "
     censored_wrds_used = censored_wrds_used[:-2] # removing last comma

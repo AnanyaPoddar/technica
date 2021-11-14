@@ -1,3 +1,6 @@
+TOKEN = "OTA2NzIyMDY1ODcxMTU1MjAx.YYcwug.AA9UtEdpoK_NK-DWUayqrucyRPs"
+GUILD = "HackerBois"
+
 from contextlib import asynccontextmanager
 import json
 import os
@@ -17,6 +20,8 @@ from firebase_admin import credentials
 from firebase_admin import db
 import pyrebase
 
+
+
 config = {
     "apiKey": "AIzaSyBqdNEsbcmNccYcej7aSVWn_CuqtNNafuw",
     "authDomain": "technica-database.firebaseapp.com",
@@ -31,7 +36,8 @@ config = {
 
 firebase = pyrebase.initialize_app(config)
 database = firebase.database()
-
+##database.child("censored_words_to_reason").set({"hello": "defn"})
+##database.child("censored_words_to_reason").child('hello').set({"definition": "defn", "reason": 'reason'})
 load_dotenv()
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
@@ -46,8 +52,8 @@ sensitive_options = ['/Sensitive Subjects', '/Social Issues & Advocacy/Discrimin
 #Ids of messages containing sensitive_options, for gathering reactions
 sensitive_ids = []
 
-blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
-blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
+#blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
+#blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
 
 #Chosen categories from above options
 sensitive_categories = []
@@ -70,6 +76,7 @@ def GetCensorInfo(info='word'):
         for val in data.values():
             out.append(val[info])
             print(out)
+    print(out)
     return out
 
 def CheckIfWordExists(word):
@@ -85,9 +92,8 @@ def GetReason(word):
 def GetDefinition(word):
     return database.child('censored_words_to_reason').child(word).child('definition').get().val()
 def SetReason(word, reason):
-    database.child('censored_words_to_reason').child(word).child('reason').set({reason})
-def SetDefinition(word, reason):
-    database.child('censored_words_to_reason').child(word).child('reason').set({definition})
+    data = {'reason': reason, 'definition': GetDefinition(word)}
+    database.child('censored_words_to_reason').child(word).update(data)
 
 #Create sensitive_topics channel
 @bot.event
@@ -140,7 +146,7 @@ async def censored(ctx):
         return
     embed=discord.Embed(title="Censored Words", color=0x00cca3)
     for word in GetCensorInfo('word'):
-        embed.add_field(name=word.title(), value=GetDefinition(word), inline=False)
+        embed.add_field(name=word.title(), value=GetDefinition(word.lower()), inline=False)
     await ctx.send(embed=embed)
 
 @bot.command(name='Define', help='Defines the specified word')
@@ -150,17 +156,18 @@ async def on_message(ctx, word):
 
     if word.lower() in GetCensorInfo('word'):# and word.lower() in blocked_def:
         embed=discord.Embed(title=word.title(), color=0x00cca3)
-        embed.add_field(name="Definition:", value=GetDefinition(word), inline=False)
-        embed.add_field(name="Reason Why It's Censored:", value=GetCensorInfoForWord(word), inline=False)
+        embed.add_field(name="Definition:", value=GetDefinition(word.lower()), inline=False)
+        embed.add_field(name="Reason Why It's Censored:", value=GetReason(word.lower()), inline=False)
         await ctx.send(embed=embed)
     
 
 @bot.command(name='AddWord', help='Allows user to add word to list of censored words')
 async def add(ctx, word):
+    word = word.lower()
     if ctx.author == bot.user:
         return
 
-    if word.lower() in GetCensorInfo('word'):
+    if word in GetCensorInfo('word'):
         await ctx.send("Word already censored")
 
     else:
@@ -222,7 +229,7 @@ async def add(ctx, word):
         # give existing info about word
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
         await ctx.send("Definition: " + definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
-        await ctx.send("Reason for censor: " + blocked_dict[word])
+        await ctx.send("Reason for censor: " + GetReason(word))
 
         embed.add_field(name="Provide Change of Reasoning", value="Why is the term " + word + " offensive and who does it target?", inline=False)
         await ctx.send(embed=embed)
@@ -246,7 +253,7 @@ async def add(ctx, word):
         # updates reasoning
         #blocked_dict[word] = msg.content # the reason the user gave for blocking word
         SetReason(word, msg.content)
-        await ctx.send("Successfully updated reasoning for [" + word + "] to [" + blocked_dict[word] +"]")
+        await ctx.send("Successfully updated reasoning for [" + word + "] to [" + GetReason(word) +"]")
 
     else:
         await ctx.send("Word is not in the dictionary. To add the term, use !AddWord command.")
@@ -256,12 +263,14 @@ async def on_message(message):
     if message.author == bot.user:
         return
     
-    out_msg = message.content
+    out_msg = message.content.lower()
     censored_wrds_used = ""
     is_censored = False
-    for i,word in enumerate(blocked_dict.keys()):
+    for i,word in enumerate(GetCensorInfo('word')):
+        word = word.lower()
         if word in message.content.lower().split():
             commands = ["!Define", "!AddWord", "!EditWord"]
+            is_censored = True
             if len(message.content.split()) == 2 and (message.content.split()[0] in commands):
                 is_censored = False
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
@@ -269,6 +278,7 @@ async def on_message(message):
     censored_wrds_used = censored_wrds_used[:-2] # removing last comma
     # delete message with slur
     if is_censored:
+        print('here')
         await message.delete()
         # send message to main channel
         await message.channel.send(out_msg + "\n" + "**Warning " + message.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
@@ -277,7 +287,7 @@ async def on_message(message):
         embed.add_field(name="Warning: I have detected the use of the following censored word(s): " + censored_wrds_used, value="You wrote: " + message.content, inline=False)
 
         for word in censored_wrds_used.split(","):
-            embed.add_field(name=word.strip(), value=blocked_def[word.strip()], inline=False)
+            embed.add_field(name=word.strip(), value=GetDefinition(word.strip()), inline=False)
         await message.author.send(embed=embed)
 
     # get attachements

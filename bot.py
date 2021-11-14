@@ -17,6 +17,7 @@ from PIL import Image
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 load_dotenv()
 
+TOKEN = "OTA2NzIyMDY1ODcxMTU1MjAx.YYcwug.n7Tp_IlPKmBaVJ3ezZteNVnQvgo"
 GUILD = "Hackerbois"
 bot = commands.Bot(command_prefix='!')
 client = language_v1.LanguageServiceClient()
@@ -79,7 +80,9 @@ async def add(ctx, word):
 
 
         # prompt user to why this term is offensive and who it offends
-        await ctx.send("Why is the term " + word + " offensive and who does it target?")
+        embed=discord.Embed(color=0x00cca3)
+        embed.add_field(name="Provide Reasoning", value="Why is the term " + word + " offensive and who does it target?", inline=False)
+        await ctx.send(embed=embed)
 
         # wait for user to answer
 
@@ -92,11 +95,10 @@ async def add(ctx, word):
         # Should it timeout or non?
         # Error: if you try to add another word while one is waiting for emoji
         # if that second word gets emoji, both get added to list
-        #can be floor, not ceil
-        await ctx.send('At least ' + str(math.ceil(0.5*ctx.guild.member_count)) + ' people react with a 👍 to add [' + word + '] to the censored list.')
+        await ctx.send('At least ' + str(math.floor(0.5*ctx.guild.member_count)) + ' people react with a 👍 to add [' + word + '] to the censored list.')
 
         def check(reaction, user):
-            return str(reaction.emoji) == '👍' and reaction.count >= 0.5*ctx.guild.member_count
+            return str(reaction.emoji) == '👍' and reaction.count >= math.floor(0.5*ctx.guild.member_count)
 
 
         #try:
@@ -111,6 +113,46 @@ async def add(ctx, word):
         blocked_dict[word] = msg.content # the reason the user gave for blocking word
         blocked_def[word] = defn
         await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
+
+
+
+@bot.command(name='EditWord', help='Allows user to add word to list of censored words')
+async def add(ctx, word):
+    if ctx.author == bot.user:
+        return
+
+    if word.lower() in blocked_dict:
+        # give existing info about word
+        definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
+        await ctx.send("Definition: " + definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
+        await ctx.send("Reason for censor: " + blocked_dict[word])
+        embed=discord.Embed(color=0x00cca3)
+        embed.add_field(name="Provide Change of Reasoning", value="Why is the term " + word + " offensive and who does it target?", inline=False)
+        await ctx.send(embed=embed)
+
+
+        # user updates reasoning
+        def check(m):
+            return len(m.content)>0 and m.channel == ctx.channel
+
+        msg = await bot.wait_for("message", check=check)
+
+        # people must agree to update wording
+        await ctx.send('At least ' + str(math.floor(0.5*ctx.guild.member_count)) + ' people react with a 👍 to update reasoning behind ' + word)
+
+        def check(reaction, user):
+            return str(reaction.emoji) == '👍' and reaction.count >= math.floor(0.5*ctx.guild.member_count)
+
+        reaction, user = await bot.wait_for('reaction_add', timeout=60.0, check=check)
+        await ctx.send('👍')
+
+        # updates reasoning
+        blocked_dict[word] = msg.content # the reason the user gave for blocking word
+        await ctx.send("Successfully updated reasoning for [" + word + "] to [" + blocked_dict[word] +"]")
+
+    else:
+        await ctx.send("Word is not in the dictionary. To add the term, use !AddWord command.")
+
 
 @bot.event
 async def on_message(message):

@@ -4,6 +4,7 @@ import os
 import io
 import requests
 import discord
+import math
 from dotenv import load_dotenv
 from discord.ext import commands
 from google.cloud import language_v1
@@ -65,11 +66,11 @@ async def add(ctx, word):
         # get definition from dictionaryAPI & send message
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
         await ctx.send(definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
-        #defn = definition.json()
-        # ['meanings'][0]['definitions'][0]['definition']
+        # Error:  if word doesn't exist
+
 
         # prompt user to why this term is offensive and who it offends
-        await ctx.send("What is the term " + word + " offensive and who does it target?")
+        await ctx.send("Why is the term " + word + " offensive and who does it target?")
 
         # wait for user to answer
 
@@ -82,10 +83,13 @@ async def add(ctx, word):
         # Should it timeout or non?
         # Error: if you try to add another word while one is waiting for emoji
         # if that second word gets emoji, both get added to list
-        await ctx.send('React with a 👍 to add [' + word + '] to the censored list.')
+        #can be floor, not ceil
+        await ctx.send('At least ' + str(math.ceil(0.5*ctx.guild.member_count)) + ' people react with a 👍 to add [' + word + '] to the censored list.')
 
         def check(reaction, user):
-            return str(reaction.emoji) == '👍'
+            return str(reaction.emoji) == '👍' and reaction.count >= 0.5*ctx.guild.member_count
+
+
         #try:
         reaction, user = await bot.wait_for('reaction_add', timeout=60.0, check=check)
         await ctx.send('👍')
@@ -95,7 +99,7 @@ async def add(ctx, word):
         #    await ctx.send('👍')
 
         # adds word to list and states why
-        blocked_dict[word] = msg.content
+        blocked_dict[word] = msg.content # the reason the user gave for blocking word
         await ctx.send("Successfully added [" + word + "] to list of censored words because [" + blocked_dict[word] +"]")
 
 @bot.event

@@ -43,17 +43,11 @@ client_vision = vision.ImageAnnotatorClient()
 
 sensitive_options = ['/Sensitive Subjects', '/Social Issues & Advocacy/Discrimination & Identity Relations', '/Health/Substance Abuse',
 '/Social Issues & Advocacy/Discrimination & Identity Relations', '/Social Issues & Advocacy/Work & Labor Issues', '/Social Issues & Advocacy/Human Rights & Liberties']
-<<<<<<< HEAD
 #Ids of messages containing sensitive_options, for gathering reactions
 sensitive_ids = []
 
 blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
 blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
-=======
-#blocked_dict = {'ur':'reason1', 'mum':'reason2', "okay": "yayyyyyyyyyyyy:"}
-#blocked_def = {'ur': 'you, a pronoun or smth', 'mum': "a mother, bri'ish luv", 'okay': 'gud stuff'}
-sensitive_categories = ['/Sensitive Subjects', 'Social Issues & Advocacy/Discrimination & Identity Relations', '/People & Society']
->>>>>>> eea211bb0fe276e66fd3977033e592f718e5b054
 
 #Chosen categories from above options
 sensitive_categories = []
@@ -218,34 +212,6 @@ async def sensitive(ctx):
         value =  value= ', '.join(sensitive_categories)
     embed.add_field(name="Sensitive Topics", value= value, inline=False)
     await ctx.send(embed=embed)
-<<<<<<< HEAD
-
-=======
-##
-##@bot.event
-##async def on_message(msg):
-##    if msg.author == bot.user:
-##        return
-##    
-##    out_msg = msg.content
-##    censored_wrds_used = ""
-##    is_censored = False
-##    for i,word in enumerate(GetCensorInfo('word')):
-##        if word + " " in msg.content or " " + word in msg.content:
-##            is_censored = True
-##            out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
-##            censored_wrds_used += word + ", "
-##    censored_wrds_used = censored_wrds_used[:-2] # removing last comma
-##    # delete message with slur
-##    if is_censored:
-##        await msg.delete()
-##        # send message to main channel
-##        await msg.channel.send(out_msg + "\n" + "**Warning " + msg.author.name + "!** Censored word(s) being used, a private message is sent to you with more information.")
-##        # send private warning msg describing the slur
-##        await msg.author.send("Your message to `" + GUILD + "` guild has been blocked since it contains censored word(s) `" +
-##                                censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
-##
->>>>>>> eea211bb0fe276e66fd3977033e592f718e5b054
 
 @bot.command(name='EditWord', help='Allows user to add word to list of censored words')
 async def add(ctx, word):
@@ -256,13 +222,8 @@ async def add(ctx, word):
         # give existing info about word
         definition = requests.get("https://api.dictionaryapi.dev/api/v2/entries/en/" + word)
         await ctx.send("Definition: " + definition.json()[0]["meanings"][0]["definitions"][0]["definition"])
-<<<<<<< HEAD
         await ctx.send("Reason for censor: " + blocked_dict[word])
 
-=======
-        await ctx.send("Reason for censor: " + GetReason(word))
-        embed=discord.Embed(color=0x00cca3)
->>>>>>> eea211bb0fe276e66fd3977033e592f718e5b054
         embed.add_field(name="Provide Change of Reasoning", value="Why is the term " + word + " offensive and who does it target?", inline=False)
         await ctx.send(embed=embed)
 
@@ -298,17 +259,11 @@ async def on_message(message):
     out_msg = message.content
     censored_wrds_used = ""
     is_censored = False
-<<<<<<< HEAD
     for i,word in enumerate(blocked_dict.keys()):
         if word in message.content.lower().split():
             commands = ["!Define", "!AddWord", "!EditWord"]
             if len(message.content.split()) == 2 and (message.content.split()[0] in commands):
                 is_censored = False
-=======
-    for i,word in enumerate(GetCensorInfo('word')):
-        if " " + word + " " in message.content:
-            is_censored = True
->>>>>>> eea211bb0fe276e66fd3977033e592f718e5b054
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             is_censored = True
             # out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")

@@ -306,12 +306,12 @@ async def on_message(message):
                 is_censored = False
 =======
     for i,word in enumerate(GetCensorInfo('word')):
-        if " " + word + " " in message.content:
+        if word in message.content.lower().split():
             is_censored = True
->>>>>>> eea211bb0fe276e66fd3977033e592f718e5b054
+            commands = ["!Define", "!AddWord", "!EditWord"]
+            if len(message.content.split()) == 2 and (message.content.split()[0] in commands):
+                is_censored = False
             out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
-            is_censored = True
-            # out_msg = out_msg.replace(word, "`" + "*" * len(word) + "`")
             censored_wrds_used += word + ", "
     censored_wrds_used = censored_wrds_used[:-2] # removing last comma
     # delete message with slur

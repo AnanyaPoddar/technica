@@ -11,6 +11,8 @@ from google.cloud import language_v1
 import shutil
 import uuid
 from google.cloud import vision
+from PIL import Image
+
 
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"apikey.json"
 load_dotenv()
@@ -200,17 +202,36 @@ async def on_message(message):
         print('violence: {0}'.format(likelihood[safe_search.violence]))
         print('racy: {0}'.format(likelihood[safe_search.racy]))
 
+        not_safe_search = False
         if likelihood[safe_search.adult] in ['Likely', 'Very Likley']:
             await message.channel.send('**ADULT content**')
+            not_safe_search = True
         if likelihood[safe_search.spoof] in ['Likely', 'Very Likley']:
             await message.channel.send('**SPOOF content**')
+            not_safe_search = True
         if likelihood[safe_search.medical] in ['Likely', 'Very Likley']:
             await message.channel.send('**MEDICAL content**')
+            not_safe_search = True
         if likelihood[safe_search.violence] in ['Likely', 'Very Likley']:
             await message.channel.send('**VIOLENCE content**')
+            not_safe_search = True
         if likelihood[safe_search.racy] in ['Likely', 'Very Likley']:
             await message.channel.send('**RACY content**')
-    
+            not_safe_search = True
+        
+        # pixelate image if it is not safe
+        if not_safe_search:
+            img = Image.open(file_path)
+            rgb_im = img.convert('RGB')
+            print(file_path[0:file_path.find('.')] + '.jpg')
+            rgb_im.save(file_path[0:file_path.find('.')] + '.jpg')
+            imgSmall = img.resize((10,10),resample=Image.BILINEAR)
+            result = imgSmall.resize(img.size,Image.NEAREST)
+            result.save(file_path)
+            await message.delete()
+            await message.channel.send(file=discord.File(file_path))
+            
+            
     await bot.process_commands(message)
 
 bot.run(TOKEN)

@@ -171,7 +171,7 @@ async def on_message(message):
                                 censored_wrds_used + "`\n[DEFINITIONs]\n[REASONs]")
     # warning messages
     out_msg = message.content
-    if not(len(out_msg) < 2 or not(out_msg.startswith("!"))):
+    if not(len(out_msg) < 2 or out_msg.startswith("!")):
         if out_msg[1:] in blocked_dict:
             embed=discord.Embed(color=0x00cca3)
             embed.add_field(name=out_msg[1:], value=blocked_dict[out_msg[1:]], inline=False)
